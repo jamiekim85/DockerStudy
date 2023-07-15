@@ -1,0 +1,47 @@
+def mainDir="Part2_Docker/Chapter06/3-2_ecr-jenkins-docker"
+def region="ap-northeast-2"
+def ecrUrl="901161062765.dkr.ecr.ap-northeast-2.amazonaws.com"
+def repository="test"
+def deployHost="ip-10-240-1-63.ap-northeast-2.compute.internal"
+def tagName="1.0"
+
+
+pipeline {
+    agent any
+
+    stages {
+        stage('Pull Codes from Github'){
+            steps{
+                checkout scm
+            }
+        }
+        stage('Build Codes by Gradle') {
+            steps {
+                sh """
+                cd ${mainDir}
+                ./gradlew clean build
+                """
+            }
+        }
+        stage('Build Docker Image by Jib & Push to AWS ECR Repository') {
+            steps {
+                withAWS(region:"${region}", credentials:"aws-key") {
+                    ecrLogin()
+                    sh """
+                        cd ${mainDir}
+                        ./gradlew jib -Djib.to.image=${ecrUrl}/${repository}:${tagName} -Djib.console='plain'
+                    """
+                }
+            }
+        }
+        stage('Deploy to AWS EC2 VM'){
+            steps{
+                sshagent(credentials : ["deploy-key"]) {
+                    sh "ssh -o StrictHostKeyChecking=no ubuntu@${deployHost} \
+                     'aws ecr get-login-password --region ${region} | docker login --username AWS --password-stdin ${ecrUrl}/${repository}; \
+                      docker run -d -p 80:8080 -t ${ecrUrl}/${repository}:${tagName};'"
+                }
+            }
+        }
+    }
+}
