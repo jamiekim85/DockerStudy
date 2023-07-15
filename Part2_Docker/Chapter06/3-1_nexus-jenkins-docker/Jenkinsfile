@@ -21,7 +21,7 @@ pipeline {
             steps {
                 sh """
                 cd ${mainDir}
-                sudo ./gradlew clean build
+                ./gradlew clean build
                 """
             }
         }
